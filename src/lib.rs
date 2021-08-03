@@ -1,4 +1,6 @@
 use std::io;
+use protobuf::Message;
+mod fileformat;
 
 fn read_file_header(r: &mut impl io::Read) {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
@@ -17,8 +19,6 @@ fn read_block(r: &mut impl io::Read) -> Option<Vec<u8>> {
     if bodylen == 0 {
         return None;
     }
-
-    println!("{:?}", bodylen);
 
     let mut flags_b: [u8; 2] = [0; 2];
     r.read(&mut flags_b).expect("Couldn't read flags");
@@ -40,6 +40,11 @@ fn read_block(r: &mut impl io::Read) -> Option<Vec<u8>> {
     return Some(body);
 }
 
+fn read_body(v: Vec<u8>) {
+    let body = fileformat::Body::parse_from_bytes(&v).unwrap();
+    println!("{:?}", body.feature);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -54,6 +59,7 @@ mod tests {
     #[test]
     fn file_read_test() {
         use crate::read_block;
+        use crate::read_body;
         use crate::read_file_header;
         use std::fs::File;
 
@@ -67,7 +73,10 @@ mod tests {
 
         loop {
             match read_block(&mut file) {
-                Some(x) => println!("block"),
+                Some(x) => {
+                    println!("block");
+                    read_body(x);
+                },
                 None => {
                     println!("end");
                     return;
