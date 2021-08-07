@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 protobuf = { version = "2" }
+wkb = { version = "0.7" }
+geo-types = { version = "0.7" }

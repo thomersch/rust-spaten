@@ -1,6 +1,41 @@
-use std::io;
 use protobuf::Message;
+use std::io;
 mod fileformat;
+use geo_types::Geometry;
+use std::collections::HashMap;
+use std::io::Cursor;
+use wkb::*;
+
+enum Value {
+    S(String),
+    I(i64),
+    F(f64),
+}
+
+impl Value {
+    fn from_bytes(src: Vec<u8>, field_type: fileformat::Tag_ValueType) -> Value {
+        match field_type {
+            fileformat::Tag_ValueType::STRING => {
+                Value::S(String::from_utf8_lossy(&src).to_string())
+            }
+            fileformat::Tag_ValueType::INT => {
+                let mut sf: [u8; 8] = [0; 8];
+                sf.copy_from_slice(&src[0..8]);
+                Value::I(i64::from_le_bytes(sf))
+            }
+            fileformat::Tag_ValueType::DOUBLE => {
+                let mut sf: [u8; 8] = [0; 8];
+                sf.copy_from_slice(&src[0..8]);
+                Value::F(f64::from_le_bytes(sf))
+            }
+        }
+    }
+}
+
+struct Feature {
+    geometry: geo_types::Geometry<f64>,
+    tags: HashMap<String, Value>,
+}
 
 fn read_file_header(r: &mut impl io::Read) {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
@@ -40,9 +75,23 @@ fn read_block(r: &mut impl io::Read) -> Option<Vec<u8>> {
     return Some(body);
 }
 
-fn read_body(v: Vec<u8>) {
+fn read_body(v: Vec<u8>) -> Vec<Feature> {
     let body = fileformat::Body::parse_from_bytes(&v).unwrap();
-    println!("{:?}", body.feature);
+    let mut features = Vec::with_capacity(body.feature.len() as usize);
+
+    for ft in body.feature {
+        let mut bytes_cur = Cursor::new(ft.geom);
+        let g = bytes_cur.read_wkb().unwrap();
+
+        let mut tags = HashMap::with_capacity(ft.tags.len());
+        for tag in ft.tags {
+            tags.insert(tag.key, Value::from_bytes(tag.value, tag.field_type));
+        }
+
+        let ft = Feature { geometry: g, tags };
+        features.push(ft);
+    }
+    features
 }
 
 #[cfg(test)]
@@ -75,8 +124,11 @@ mod tests {
             match read_block(&mut file) {
                 Some(x) => {
                     println!("block");
-                    read_body(x);
-                },
+                    let fts = read_body(x);
+                    for ft in fts {
+                        // println!("{:?}", ft.geometry);
+                    }
+                }
                 None => {
                     println!("end");
                     return;
