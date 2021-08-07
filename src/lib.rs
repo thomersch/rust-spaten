@@ -1,4 +1,5 @@
 use protobuf::Message;
+use std::fmt;
 use std::io;
 mod fileformat;
 use geo_types::Geometry;
@@ -28,6 +29,16 @@ impl Value {
                 sf.copy_from_slice(&src[0..8]);
                 Value::F(f64::from_le_bytes(sf))
             }
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::S(v) => write!(f, "\"{}\"", v),
+            Value::I(v) => write!(f, "{}", v),
+            Value::F(v) => write!(f, "{}", v),
         }
     }
 }
@@ -126,7 +137,7 @@ mod tests {
                     println!("block");
                     let fts = read_body(x);
                     for ft in fts {
-                        // println!("{:?}", ft.geometry);
+                        // println!("{:?}", ft.tags);
                     }
                 }
                 None => {
