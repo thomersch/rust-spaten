@@ -1,9 +1,9 @@
-use protobuf::Message;
-use std::fmt;
-use std::io;
 mod fileformat;
 use geo_types::Geometry;
+use protobuf::Message;
 use std::collections::HashMap;
+use std::fmt;
+use std::io;
 use std::io::Cursor;
 use wkb::*;
 
@@ -46,6 +46,35 @@ impl fmt::Debug for Value {
 struct Feature {
     geometry: geo_types::Geometry<f64>,
     tags: HashMap<String, Value>,
+}
+
+struct FeatureIterator<'a> {
+    stream: &'a mut dyn io::Read,
+    queue: Vec<Feature>,
+}
+
+impl FeatureIterator<'_> {
+    fn new(r: &mut impl io::Read) -> FeatureIterator {
+        read_file_header(r);
+        FeatureIterator {
+            stream: r,
+            queue: Vec::new(),
+        }
+    }
+}
+
+impl Iterator for FeatureIterator<'_> {
+    type Item = Feature;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.queue.len() == 0 {
+            match read_block(&mut self.stream) {
+                Some(x) => self.queue = read_body(x),
+                None => return None,
+            }
+        }
+        Some(self.queue.remove(0))
+    }
 }
 
 fn read_file_header(r: &mut impl io::Read) {
@@ -107,6 +136,8 @@ fn read_body(v: Vec<u8>) -> Vec<Feature> {
 
 #[cfg(test)]
 mod tests {
+    use crate::FeatureIterator;
+
     #[test]
     fn file_header_test() {
         use crate::read_file_header;
@@ -123,12 +154,7 @@ mod tests {
         use crate::read_file_header;
         use std::fs::File;
 
-        let mut file = File::open("nrw-motorway.spaten");
-
-        let mut file = match file {
-            Ok(f) => f,
-            Err(error) => panic!("Couldn't open file: {:?}", error),
-        };
+        let mut file = File::open("nrw-motorway.spaten").unwrap();
         read_file_header(&mut file);
 
         loop {
@@ -145,6 +171,17 @@ mod tests {
                     return;
                 }
             }
+        }
+    }
+
+    #[test]
+    fn stream_iterator() {
+        use crate::read_file_header;
+        use std::fs::File;
+
+        let mut file = File::open("nrw-motorway.spaten").unwrap();
+        for ft in FeatureIterator::new(&mut file) {
+            println!("{:?}", ft.tags)
         }
     }
 }
