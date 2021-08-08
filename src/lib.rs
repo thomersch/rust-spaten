@@ -1,5 +1,4 @@
 mod fileformat;
-use geo_types::Geometry;
 use protobuf::Message;
 use std::collections::HashMap;
 use std::fmt;
@@ -172,7 +171,7 @@ mod tests {
                 Some(x) => {
                     println!("block");
                     let fts = read_body(x);
-                    for ft in fts {
+                    for _ft in fts {
                         // println!("{:?}", ft.tags);
                     }
                 }
