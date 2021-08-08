@@ -7,7 +7,7 @@ use std::io;
 use std::io::Cursor;
 use wkb::*;
 
-enum Value {
+pub enum Value {
     S(String),
     I(i64),
     F(f64),
@@ -43,18 +43,28 @@ impl fmt::Debug for Value {
     }
 }
 
-struct Feature {
-    geometry: geo_types::Geometry<f64>,
-    tags: HashMap<String, Value>,
+pub struct Feature {
+    pub geometry: geo_types::Geometry<f64>,
+    pub tags: HashMap<String, Value>,
 }
 
-struct FeatureIterator<'a> {
+pub struct FeatureIterator<'a> {
     stream: &'a mut dyn io::Read,
     queue: Vec<Feature>,
 }
 
 impl FeatureIterator<'_> {
-    fn new(r: &mut impl io::Read) -> FeatureIterator {
+    /// Initializes a streaming reader that can be used to iterate over the features.
+    /// ```
+    /// use spaten::FeatureIterator;
+    /// use std::fs::File;
+    ///
+    /// let mut file = File::open("nrw-motorway.spaten").unwrap();
+    /// for ft in FeatureIterator::new(&mut file) {
+    ///     println!("{:?}", ft.tags)
+    /// }
+    /// ```
+    pub fn new(r: &mut impl io::Read) -> FeatureIterator {
         read_file_header(r);
         FeatureIterator {
             stream: r,
@@ -176,7 +186,6 @@ mod tests {
 
     #[test]
     fn stream_iterator() {
-        use crate::read_file_header;
         use std::fs::File;
 
         let mut file = File::open("nrw-motorway.spaten").unwrap();
