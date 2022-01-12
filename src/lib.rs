@@ -7,26 +7,26 @@ use std::io::Cursor;
 use wkb::*;
 
 pub enum Value {
-    S(String),
-    I(i64),
-    F(f64),
+    String(String),
+    Integer(i64),
+    Float(f64),
 }
 
 impl Value {
     fn from_bytes(src: Vec<u8>, field_type: fileformat::Tag_ValueType) -> Value {
         match field_type {
             fileformat::Tag_ValueType::STRING => {
-                Value::S(String::from_utf8_lossy(&src).to_string())
+                Value::String(String::from_utf8_lossy(&src).to_string())
             }
             fileformat::Tag_ValueType::INT => {
                 let mut sf: [u8; 8] = [0; 8];
                 sf.copy_from_slice(&src[0..8]);
-                Value::I(i64::from_le_bytes(sf))
+                Value::Integer(i64::from_le_bytes(sf))
             }
             fileformat::Tag_ValueType::DOUBLE => {
                 let mut sf: [u8; 8] = [0; 8];
                 sf.copy_from_slice(&src[0..8]);
-                Value::F(f64::from_le_bytes(sf))
+                Value::Float(f64::from_le_bytes(sf))
             }
         }
     }
@@ -35,9 +35,9 @@ impl Value {
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::S(v) => write!(f, "\"{}\"", v),
-            Value::I(v) => write!(f, "{}", v),
-            Value::F(v) => write!(f, "{}", v),
+            Value::String(v) => write!(f, "\"{}\"", v),
+            Value::Integer(v) => write!(f, "{}", v),
+            Value::Float(v) => write!(f, "{}", v),
         }
     }
 }
@@ -78,15 +78,18 @@ impl Iterator for FeatureIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.queue.len() == 0 {
             match read_block(&mut self.stream) {
-                Some(x) => self.queue = read_body(x),
-                None => return None,
+                Ok(x) => match x {
+                    Some(s) => self.queue = read_body(s),
+                    None => return None,
+                },
+                Err(e) => panic!("iterating failed: {:?}", e),
             }
         }
         Some(self.queue.remove(0))
     }
 }
 
-fn read_file_header(r: &mut impl io::Read) {
+pub fn read_file_header(r: &mut impl io::Read) {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
     r.read(&mut buf).expect("Couldn't read file header");
     assert_eq!(&buf, b"SPAT");
@@ -95,13 +98,15 @@ fn read_file_header(r: &mut impl io::Read) {
     assert_eq!(&buf, b"\0\0\0\0");
 }
 
-fn read_block(r: &mut impl io::Read) -> Option<Vec<u8>> {
+pub fn read_block(r: &mut impl io::Read) -> Result<Option<Vec<u8>>, &'static str> {
     let mut bodylen_b: [u8; 4] = [0; 4];
-    r.read(&mut bodylen_b).expect("Couldn't read body length");
+    if let Err(_) = r.read(&mut bodylen_b) {
+        return Err("Couldn't read body length");
+    }
     let bodylen = u32::from_le_bytes(bodylen_b);
 
     if bodylen == 0 {
-        return None;
+        return Ok(None);
     }
 
     let mut flags_b: [u8; 2] = [0; 2];
@@ -121,10 +126,10 @@ fn read_block(r: &mut impl io::Read) -> Option<Vec<u8>> {
     let mut body = vec![0; bodylen as usize];
     r.read(&mut body).expect("Body reading failed");
 
-    return Some(body);
+    return Ok(Some(body));
 }
 
-fn read_body(v: Vec<u8>) -> Vec<Feature> {
+pub fn read_body(v: Vec<u8>) -> Vec<Feature> {
     let body = fileformat::Body::parse_from_bytes(&v).unwrap();
     let mut features = Vec::with_capacity(body.feature.len() as usize);
 
@@ -168,16 +173,23 @@ mod tests {
 
         loop {
             match read_block(&mut file) {
-                Some(x) => {
-                    println!("block");
-                    let fts = read_body(x);
-                    for _ft in fts {
-                        // println!("{:?}", ft.tags);
+                Ok(x) => {
+                    match x {
+                        Some(block) => {
+                            println!("block");
+                            let fts = read_body(block);
+                            for _ft in fts {
+                                // println!("{:?}", ft.tags);
+                            }
+                        }
+                        None => {
+                            println!("end");
+                            return;
+                        }
                     }
                 }
-                None => {
-                    println!("end");
-                    return;
+                Err(err) => {
+                    panic!("error while reading: {:?}", err)
                 }
             }
         }

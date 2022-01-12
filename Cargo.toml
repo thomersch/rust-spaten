@@ -1,5 +1,5 @@
 [package]
-name = "rust-spaten"
+name = "spaten"
 version = "0.1.0"
 authors = ["Thomas Skowron <th@skowron.eu>"]
 edition = "2018"
@@ -10,9 +10,9 @@ repository = "https://github.com/thomersch/rust-spaten"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+geo-types = { version = "0.7" }
 protobuf = { version = "2" }
 wkb = { version = "0.7" }
-geo-types = { version = "0.7" }
 
 [lib]
 name = "spaten"
